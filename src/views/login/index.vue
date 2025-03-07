@@ -11,20 +11,19 @@
 
       <div class="form">
         <div class="form-item">
-          <input class="inp" maxlength="11" placeholder="请输入手机号码" type="text">
+          <input class="inp" v-model="mobile" maxlength="11" placeholder="请输入手机号码" type="text">
         </div>
 
         <div class="form-item">
-          <input class="inp" maxlength="5" placeholder="请输入图形验证码" type="text">
-          <img v-if="picUrl"  :src="picUrl" @click="getCode"  alt="">
+          <input class="inp" v-model="picCode" maxlength="5" placeholder="请输入图形验证码" type="text">
+          <img v-if="picUrl" :src="picUrl" @click="getPicCode">
         </div>
 
         <div class="form-item">
           <input class="inp" placeholder="请输入短信验证码" type="text">
-          <button @click="getCode">获取验证码</button>
+          <button @click="getCode">{{ second === totalSecond ? '获取验证码' : second + `秒后重新发送`}}</button>
 
         </div>
-
       </div>
 
       <div class="login-btn">登录</div>
@@ -36,21 +35,69 @@
 </template>
 
 <script>
-import { getCode } from '@/api/login'
+import { getPicCode, getMsgCode } from '@/api/login'
+
 export default {
   name: 'LoginPage',
   data: function () {
     return {
       picUrl: '',
-      picKey: ''
+      picKey: '',
+      totalSecond: 60, // 总秒数
+      second: 60, // 倒计时的秒数
+      timer: null, // 定时器 id
+      mobile: '', // 手机号
+      picCode: '' // 图形验证码
     }
+  },
+  created () {
+    this.getPicCode()
   },
 
   methods: {
-    async getCode () {
-      const { data: { base64, key } } = await getCode()
+    async getPicCode () {
+      const { data: { base64, key } } = await getPicCode()
       this.picUrl = base64
       this.picKey = key
+
+      this.$toast('发送成功，请注意查收')
+    },
+    async getCode () {
+      if (!this.timer && this.second === this.totalSecond) {
+        // 开启倒计时
+        this.timer = setInterval(() => {
+          this.second--
+
+          if (this.second < 1) {
+            clearInterval(this.timer)
+            this.timer = null
+            this.second = this.totalSecond
+          }
+        }, 1000)
+        if (!this.validFn()) {
+          return
+        }
+        const res = await getMsgCode(this.picCode, this.picKey, this.mobile)
+        console.log(res)
+
+        // 发送请求，获取验证码
+        this.$toast('发送成功，请注意查收')
+      }
+    },
+    destroyed () {
+      clearInterval(this.timer)
+    },
+    // 校验输入框内容
+    validFn () {
+      if (!/^1[3-9]\d{9}$/.test(this.mobile)) {
+        this.$toast('请输入正确的手机号')
+        return false
+      }
+      if (!/^\w{4}$/.test(this.picCode)) {
+        this.$toast('请输入正确的图形验证码')
+        return false
+      }
+      return true
     }
   }
 }
